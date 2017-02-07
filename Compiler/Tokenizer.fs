@@ -8,19 +8,19 @@ type Token =
     | Integer of int
     | String of string
     | Other of string
-type Location = { Position : int; Line : int; Column : int; Length : int }
+type Location = { File : string; Position : int; Line : int; Column : int; Length : int }
 type LocatedToken = Token * Location
     
 exception SyntaxError of string * Location
 exception EOFError of string
 
 module Tokenizer =
-    let tokenize source = 
+    let tokenize filename source = 
         let locatedExplode s =
             let rec subExplode position line column pieces source =
                 match source with
                 | f::rest ->
-                    let pieces = ((f, { Position = position; Line = line; Column = column; Length = 1 }) :: pieces)
+                    let pieces = ((f, { File = filename; Position = position; Line = line; Column = column; Length = 1 }) :: pieces)
                     match f with
                     | '\n' -> subExplode (position + 1) (line + 1) 0 pieces rest
                     | _ -> subExplode (position + 1) line (column + 1) pieces rest

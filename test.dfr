@@ -1,0 +1,5 @@
+:m ->fragColor [ _ 1 ] =gl_FragColor ;
+
+[ 1 0 1 ] ->fragColor
+
+:

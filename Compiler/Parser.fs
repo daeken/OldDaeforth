@@ -28,7 +28,7 @@ module Parser =
                     let rest, sblock, swords, smacros = parseWordOrMacro rest false false [] Map.empty Map.empty
                     parseWordOrMacro rest topLevel false block (words.Add(name, {Word.Name=name; Block=sblock; Words=swords; Macros=smacros})) macros
                 | (_, location) :: rest -> raise (SyntaxError ("Expected word name", location))
-                | [] -> raise (EOFError "Expected word name")
+                | [] -> raise (SyntaxError ("Expected word name", location))
             | (Token.Other ":m", location) :: rest ->
                 if inMacro then raise (SyntaxError ("Nested macros disallowed", location))
                 match rest with
@@ -36,7 +36,7 @@ module Parser =
                     let rest, sblock, _, _ = parseWordOrMacro rest false true [] Map.empty Map.empty
                     parseWordOrMacro rest topLevel false block words (macros.Add(name, {Macro.Name=name; Block=sblock}))
                 | (_, location) :: rest -> raise (SyntaxError ("Expected macro name", location))
-                | [] -> raise (EOFError "Expected macro name")
+                | [] -> raise (SyntaxError ("Expected macro name", location))
             | (Token.Other ";", location) :: rest ->
                 if topLevel then raise (SyntaxError ("Unexpected ';' at top level", location))
                 rest, (List.rev block), words, macros
@@ -48,4 +48,7 @@ module Parser =
         
         let _, block, words, macros = parseWordOrMacro tokens true false [] Map.empty Map.empty
         {Name="__topLevel"; Block=block; Words=words; Macros=macros}
+    
+    let parse tokens =
+        tokens |> stripComments |> generateWordTree
     
