@@ -12,7 +12,7 @@ type Location = { File : string; Position : int; Line : int; Column : int; Lengt
 type LocatedToken = Token * Location
     
 exception SyntaxError of string * Location
-exception EOFError of string
+exception EOFError of string * Location
 
 module Tokenizer =
     let tokenize filename source = 
@@ -28,19 +28,19 @@ module Tokenizer =
             [for c in s -> c] |> subExplode 0 0 0 []
         
         
-        let rec parseString inp cur =
+        let rec parseString inp startLocation cur =
             match inp with
             | ('"', _)::rest -> (Token.String cur, rest)
             | ('\\', _)::rest ->
                 match rest with
-                | ('n', _)::rest -> cur + "\n" |> parseString rest
-                | ('t', _)::rest -> cur + "\t" |> parseString rest
-                | ('\\', _)::rest -> cur + "\\" |> parseString rest
-                | ('"', _)::rest -> cur + "\"" |> parseString rest
+                | ('n', _)::rest -> cur + "\n" |> parseString rest startLocation
+                | ('t', _)::rest -> cur + "\t" |> parseString rest startLocation
+                | ('\\', _)::rest -> cur + "\\" |> parseString rest startLocation
+                | ('"', _)::rest -> cur + "\"" |> parseString rest startLocation
                 | (_, location)::_ -> raise (SyntaxError ("Unknown string escape", location))
-                | [] -> raise (EOFError "Unexpected EOF while parsing string escape")
-            | (c, _)::rest -> cur + (string c) |> parseString rest
-            | _ -> raise (EOFError "Unexpected EOF while parsing string")
+                | [] -> raise (EOFError ("Unexpected EOF while parsing string escape", startLocation))
+            | (c, _)::rest -> cur + (string c) |> parseString rest startLocation
+            | _ -> raise (EOFError ("Unexpected EOF while parsing string", startLocation))
         
         let parseToken inp =
             let rec get inp cur =
@@ -66,7 +66,7 @@ module Tokenizer =
                 match ch with
                 | ' ' | '\t' | '\n' | '\r' -> makeTokens rest tokens
                 | '"' ->
-                    let str, rest = parseString rest ""
+                    let str, rest = parseString rest location ""
                     let location = {location with Length = inp.Length - rest.Length - (if rest.Length = 0 then 0 else 1)}
                     (str, location) :: tokens |> makeTokens rest
                 | _ ->

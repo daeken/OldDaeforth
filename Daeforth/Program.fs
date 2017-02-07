@@ -43,8 +43,8 @@ let main argv =
     | :? FileNotFoundException as fnf ->
         printfn "File not found: %A" fnf.FileName
         1
-    | EOFError(err) ->
-        printfn "Premature end of file: %s" err
+    | EOFError(err, location) ->
+        printfn "Premature end of file: %s (%s line %i column %i)" err location.File (location.Line + 1) (location.Column + 1)
         1
     | SyntaxError(err, location) ->
         printfn "Syntax error in %s line %i column %i: %s" location.File (location.Line + 1) (location.Column + 1) err
