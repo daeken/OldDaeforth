@@ -49,7 +49,7 @@ module Parser =
             | (_, location) :: _ ->
                 raise (SyntaxError ("Unexpected token in signature", location))
             | [] ->
-                raise (EOFError ("Unexpected EOF in signature", startLocation))
+                raise (EOFError ("Unexpected end of signature", startLocation))
                 
         match block with
         | (Token.Other "(", location) :: rest ->
