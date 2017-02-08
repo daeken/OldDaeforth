@@ -34,10 +34,11 @@ module Parser =
                 sub rest startLocation true args
             | (Token.Other x, location) :: rest when not inReturns ->
                 let parts = x.Split [|':'|] |> Array.toList
-                let name, stored = match parts with
+                let name, stored =
+                    match parts with
                     | [""; _] -> None, false
-                    | "$" :: _ when parts.Length <= 2 -> None, true
-                    | name :: _ when parts.Length <= 2 ->
+                    | ["$"] | ["$"; _] -> None, true
+                    | [name] | [name; _] ->
                         if name.StartsWith("$") then
                             Some (name.Substring(1)), true
                         else
