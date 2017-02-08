@@ -1,7 +1,9 @@
 ﻿namespace Compiler
 
-type Macro = { Name : string; Block : LocatedToken list }
-type Word = { Name : string; Block : LocatedToken list; Words : Map<string, Word>; Macros : Map<string, Macro> }
+type Argument = { Name : string option; Stored : bool }
+type Signature = { Arguments : Argument list }
+type Macro = { Name : string; Signature : Signature option; Block : LocatedToken list }
+type Word = { Name : string; Signature : Signature option; Block : LocatedToken list; Words : Map<string, Word>; Macros : Map<string, Macro> }
 
 module Parser =
     let stripComments tokens =
@@ -21,6 +23,39 @@ module Parser =
                 | location::_ -> raise (EOFError ("Unexpected EOF while looking for end of comment", location))
                 | [] -> List.rev acc
         sub tokens [] []
+    
+    let parseSignature block =
+        let rec sub inp startLocation inReturns args =
+            match inp with
+            | (Token.Other ")", _) :: rest ->
+                Some { Arguments=List.rev args }, rest
+            | (Token.Other "->", location) :: rest ->
+                if inReturns then raise (SyntaxError ("Unexpected -> inside returns area of signature", location))
+                sub rest startLocation true args
+            | (Token.Other x, location) :: rest when not inReturns ->
+                let parts = x.Split [|':'|] |> Array.toList
+                let name, stored = match parts with
+                    | [""; _] -> None, false
+                    | "$" :: _ when parts.Length <= 2 -> None, true
+                    | name :: _ when parts.Length <= 2 ->
+                        if name.StartsWith("$") then
+                            Some (name.Substring(1)), true
+                        else
+                            Some name, false
+                    | _ -> raise (SyntaxError ("Unexpected token in signature", location))
+                let arg = { Name=name; Stored=stored }
+                sub rest startLocation false (arg::args)
+            | (Token.Other x, location) :: rest when inReturns -> sub rest startLocation true args
+            | (_, location) :: _ ->
+                raise (SyntaxError ("Unexpected token in signature", location))
+            | [] ->
+                raise (EOFError ("Unexpected EOF in signature", startLocation))
+                
+        match block with
+        | (Token.Other "(", location) :: rest ->
+            sub rest location false []
+        | _ ->
+            None, block
 
     let generateWordTree tokens =
         let rec parseWordOrMacro inp startLocation topLevel inMacro block words macros =
@@ -30,7 +65,8 @@ module Parser =
                 match rest with
                 | (Token.Other name, location) :: rest ->
                     let rest, sblock, swords, smacros = parseWordOrMacro rest location false false [] Map.empty Map.empty
-                    parseWordOrMacro rest startLocation topLevel false block (words.Add(name, {Word.Name=name; Block=sblock; Words=swords; Macros=smacros})) macros
+                    let signature, sblock = parseSignature sblock
+                    parseWordOrMacro rest startLocation topLevel false block (words.Add(name, {Word.Name=name; Signature=signature; Block=sblock; Words=swords; Macros=smacros})) macros
                 | (_, location) :: rest -> raise (SyntaxError ("Expected word name", location))
                 | [] -> raise (EOFError ("Expected word name", location))
             | (Token.Other ":m", location) :: rest ->
@@ -38,7 +74,8 @@ module Parser =
                 match rest with
                 | (Token.Other name, location) :: rest ->
                     let rest, sblock, _, _ = parseWordOrMacro rest location false true [] Map.empty Map.empty
-                    parseWordOrMacro rest startLocation topLevel false block words (macros.Add(name, {Macro.Name=name; Block=sblock}))
+                    let signature, sblock = parseSignature sblock
+                    parseWordOrMacro rest startLocation topLevel false block words (macros.Add(name, {Macro.Name=name; Signature=signature; Block=sblock}))
                 | (_, location) :: rest -> raise (SyntaxError ("Expected macro name", location))
                 | [] -> raise (EOFError ("Expected macro name", location))
             | (Token.Other ";", location) :: rest ->
@@ -53,9 +90,9 @@ module Parser =
         match tokens with
         | (_, location)::_ ->
             let _, block, words, macros = parseWordOrMacro tokens location true false [] Map.empty Map.empty
-            {Name="__topLevel"; Block=block; Words=words; Macros=macros}
+            {Name="__topLevel"; Signature=None; Block=block; Words=words; Macros=macros}
         | [] ->
-            {Name="__topLevel"; Block=[]; Words=Map.empty; Macros=Map.empty}
+            {Name="__topLevel"; Signature=None; Block=[]; Words=Map.empty; Macros=Map.empty}
     
     let parse tokens =
         tokens |> stripComments |> generateWordTree
