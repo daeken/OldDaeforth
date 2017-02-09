@@ -8,13 +8,15 @@ type Token =
     | Integer of int
     | String of string
     | Other of string
-type Location = { File : string; Position : int; Line : int; Column : int; Length : int }
+type Location = { File : string; Position : int; Line : int; Column : int; Length : int } with
+    static member Generated = { File="Generated"; Position=0; Line=0; Column=0; Length=0 }
 type LocatedToken = Token * Location
     
 exception SyntaxError of string * Location
 exception EOFError of string * Location
 
 module Tokenizer =
+    
     let tokenize filename source = 
         let locatedExplode s =
             let rec subExplode position line column pieces source =

@@ -57,4 +57,5 @@ type Node =
 | Return of TypedNode
 | Break
 | Continue
+| Word of Name:string * Returns:(Type list) * Arguments:((string * Type) list)
 and TypedNode = Type * Node

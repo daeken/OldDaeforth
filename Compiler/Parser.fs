@@ -1,8 +1,8 @@
 ﻿namespace Compiler
 
 type Argument = { Name : string option; Stored : bool }
-type Signature = { Arguments : Argument list }
-type Macro = { Name : string; Signature : Signature option; Block : LocatedToken list }
+type Signature = Argument list
+type Macro = { Name : string; Block : LocatedToken list }
 type Word = { Name : string; Signature : Signature option; Block : LocatedToken list; Words : Map<string, Word>; Macros : Map<string, Macro> }
 
 module Parser =
@@ -28,7 +28,7 @@ module Parser =
         let rec sub inp startLocation inReturns args =
             match inp with
             | (Token.Other ")", _) :: rest ->
-                Some { Arguments=List.rev args }, rest
+                Some (List.rev args), rest
             | (Token.Other "->", location) :: rest ->
                 if inReturns then raise (SyntaxError ("Unexpected -> inside returns area of signature", location))
                 sub rest startLocation true args
@@ -37,7 +37,7 @@ module Parser =
                 let name, stored =
                     match parts with
                     | [""; _] -> None, false
-                    | ["$"] | ["$"; _] -> None, true
+                    | ["$"] | ["$"; _] -> raise (SyntaxError ("Stored parameters must be named", location))
                     | [name] | [name; _] ->
                         if name.StartsWith("$") then
                             Some (name.Substring(1)), true
@@ -54,9 +54,28 @@ module Parser =
                 
         match block with
         | (Token.Other "(", location) :: rest ->
-            sub rest location false []
+            sub rest location false [] // XXX: Check that all names are None or Some -- no mix and match
         | _ ->
             None, block
+    
+    let rewriteBlock name tokens =
+        let signature, sblock = parseSignature tokens
+
+        let varName vname = sprintf "macro_%s_%s" name vname
+
+        let rec buildPreamble spec acc =
+            match spec with
+            | {Name=name; Stored=stored}::spec ->
+                match name with
+                | Some name -> (Other((if stored then "=$" else "=>") + varName name), Location.Generated) :: acc |> buildPreamble spec
+                | None -> acc |> buildPreamble spec
+            | [] -> acc
+        
+        // XXX: Replace arg uses with their varName equivalent
+
+        match signature with
+        | Some x -> buildPreamble (List.rev x) sblock
+        | None -> buildPreamble [{Name=Some "_"; Stored=false}] sblock
 
     let generateWordTree tokens =
         let rec parseWordOrMacro inp startLocation topLevel inMacro block words macros =
@@ -75,8 +94,8 @@ module Parser =
                 match rest with
                 | (Token.Other name, location) :: rest ->
                     let rest, sblock, _, _ = parseWordOrMacro rest location false true [] Map.empty Map.empty
-                    let signature, sblock = parseSignature sblock
-                    parseWordOrMacro rest startLocation topLevel false block words (macros.Add(name, {Macro.Name=name; Signature=signature; Block=sblock}))
+                    let sblock = rewriteBlock name sblock
+                    parseWordOrMacro rest startLocation topLevel false block words (macros.Add(name, {Macro.Name=name; Block=sblock}))
                 | (_, location) :: rest -> raise (SyntaxError ("Expected macro name", location))
                 | [] -> raise (EOFError ("Expected macro name", location))
             | (Token.Other ";", location) :: rest ->
