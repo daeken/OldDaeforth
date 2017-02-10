@@ -58,24 +58,68 @@ module Parser =
         | _ ->
             None, block
     
+    let parseShorthand (token:string) location =
+        let token = [for c in token -> string c]
+        let token, modifiers = 
+            match token with
+            | ["/"; "{"]          -> ["{"], ["map"]
+            | "/" :: "*" :: rest  -> rest, ["map"]
+            | "/" :: rest         -> "&" :: rest, ["map"]
+            | ["\\"; "{"]         -> ["{"], ["reduce"]
+            | "\\" :: "*" :: rest -> rest, ["reduce"]
+            | "\\" :: rest        -> "&" :: rest, ["reduce"]
+            | "*" :: "*" :: rest  -> token, []
+            | ["*"; "{"]          -> ["{"], ["call"]
+            | "*" :: rest         -> rest, ["call"]
+            | _                   -> token, []
+        let sb = System.Text.StringBuilder(token.Length)
+        token |> List.iter (sb.Append >> ignore)
+        sb.ToString(), [for elem in modifiers -> (Token.Other elem, location)]
+    
+    // This does not rewrite block shorthand!
+    let rewriteShorthand tokens =
+        let rec rewriteBlock inp acc =
+            match inp with
+            | (Token.Other token, location) :: rest ->
+                let newtoken, modifiers = parseShorthand token location
+                if (token.Contains("{")) && not (newtoken.Contains("{")) then
+                    (Token.Other token, location) :: acc |> rewriteBlock rest
+                else
+                    (List.rev modifiers) @ ((Token.Other newtoken, location) :: acc) |> rewriteBlock rest
+            | x :: rest -> x :: acc |> rewriteBlock rest
+            | [] -> acc
+        
+        rewriteBlock tokens [] |> List.rev
+    
     let rewriteBlock name tokens =
         let signature, sblock = parseSignature tokens
 
         let varName vname = sprintf "macro_%s_%s" name vname
 
-        let rec buildPreamble spec acc =
+        let rec buildPreamble spec (names:Map<string, string>) acc =
             match spec with
             | {Name=name; Stored=stored}::spec ->
                 match name with
-                | Some name -> (Other((if stored then "=$" else "=>") + varName name), Location.Generated) :: acc |> buildPreamble spec
-                | None -> acc |> buildPreamble spec
-            | [] -> acc
+                | Some name -> (Other((if stored then "=$" else "=>") + varName name), Location.Generated) :: acc |> buildPreamble spec (names.Add(name, varName name))
+                | None -> acc |> buildPreamble spec names
+            | [] -> acc, names
         
-        // XXX: Replace arg uses with their varName equivalent
+        let rec rewriteNames inp (names:Map<string, string>) acc =
+            match inp with
+            | (Token.Other x, location) :: rest ->
+                let name =
+                    if (names.ContainsKey(x)) then names.[x]
+                    else x
+                (Token.Other name, location) :: acc |> rewriteNames rest names
+            | token :: rest -> token :: acc |> rewriteNames rest names
+            | [] -> List.rev acc
 
-        match signature with
-        | Some x -> buildPreamble (List.rev x) sblock
-        | None -> buildPreamble [{Name=Some "_"; Stored=false}] sblock
+        let block, names =
+            match signature with
+            | Some x -> buildPreamble (List.rev x) Map.empty sblock
+            | None -> buildPreamble [{Name=Some "_"; Stored=false}] Map.empty sblock
+        
+        rewriteNames block names []
 
     let generateWordTree tokens =
         let rec parseWordOrMacro inp startLocation topLevel inMacro block words macros =
@@ -86,6 +130,7 @@ module Parser =
                 | (Token.Other name, location) :: rest ->
                     let rest, sblock, swords, smacros = parseWordOrMacro rest location false false [] Map.empty Map.empty
                     let signature, sblock = parseSignature sblock
+                    let sblock = rewriteShorthand sblock
                     parseWordOrMacro rest startLocation topLevel false block (words.Add(name, {Word.Name=name; Signature=signature; Block=sblock; Words=swords; Macros=smacros})) macros
                 | (_, location) :: rest -> raise (SyntaxError ("Expected word name", location))
                 | [] -> raise (EOFError ("Expected word name", location))
@@ -94,7 +139,7 @@ module Parser =
                 match rest with
                 | (Token.Other name, location) :: rest ->
                     let rest, sblock, _, _ = parseWordOrMacro rest location false true [] Map.empty Map.empty
-                    let sblock = rewriteBlock name sblock
+                    let sblock = sblock |> rewriteShorthand |> rewriteBlock name
                     parseWordOrMacro rest startLocation topLevel false block words (macros.Add(name, {Macro.Name=name; Block=sblock}))
                 | (_, location) :: rest -> raise (SyntaxError ("Expected macro name", location))
                 | [] -> raise (EOFError ("Expected macro name", location))
