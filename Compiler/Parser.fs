@@ -82,7 +82,7 @@ module Parser =
             match inp with
             | (Token.Other token, location) :: rest ->
                 let newtoken, modifiers = parseShorthand token location
-                if (token.Contains("{")) && not (newtoken.Contains("{")) then
+                if (token.Contains("{")) && token <> newtoken then
                     (Token.Other token, location) :: acc |> rewriteBlock rest
                 else
                     (List.rev modifiers) @ ((Token.Other newtoken, location) :: acc) |> rewriteBlock rest
@@ -116,7 +116,7 @@ module Parser =
 
         let block, names =
             match signature with
-            | Some x -> buildPreamble (List.rev x) Map.empty sblock
+            | Some x -> buildPreamble x Map.empty sblock
             | None -> buildPreamble [{Name=Some "_"; Stored=false}] Map.empty sblock
         
         rewriteNames block names []
