@@ -9,6 +9,7 @@ type Type =
 | Unit
 | Array of Length:int option
 | Block of Return:Type * Arguments:(Type list option)
+| Magic // Used only for internal recordkeeping!
 
 type Operation =
 | Not
@@ -38,6 +39,7 @@ type Node =
 | Value of Value
 | WordReference of string
 | LocalReference of string
+| ArgumentReference of int // These can be positive (0 == first) or negative (-1 == last)
 | Block of TypedNode list
 | GlobalReference of Name:string * Flags:(GlobalFlag list)
 | Unary of Operation:Operation * RValue:TypedNode
@@ -58,4 +60,6 @@ type Node =
 | Break
 | Continue
 | Word of Name:string * Returns:(Type list) * Arguments:((string * Type) list)
+// Magical nodes used for internal purposes
+| ArrayStart of Location
 and TypedNode = Type * Node

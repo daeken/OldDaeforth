@@ -24,6 +24,11 @@ let compile lang (fn : string) =
     
     let wordtree = Tokenizer.tokenize fn code |> Parser.parse
     printfn "%A" wordtree
+    printfn "\n\n\n"
+    
+    let ast = Processor.buildAst wordtree
+    printfn "%A" ast
+
     ()
 
 [<EntryPoint>]
