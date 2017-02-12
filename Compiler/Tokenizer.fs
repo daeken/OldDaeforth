@@ -11,7 +11,8 @@ type Token =
 type Location = { File : string; Position : int; Line : int; Column : int; Length : int } with
     static member Generated = { File="Generated"; Position=0; Line=0; Column=0; Length=0 }
 type LocatedToken = Token * Location
-    
+
+exception ICE    
 exception SyntaxError of string * Location
 exception EOFError of string * Location
 

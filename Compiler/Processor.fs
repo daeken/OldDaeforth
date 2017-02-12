@@ -9,7 +9,12 @@ module Processor =
                 | head :: rest -> head, rest
                 | [] ->
                     unnamedArgs <- unnamedArgs - 1
-                    ArgumentReference unnamedArgs, []
+                    (Unknown, ArgumentReference unnamedArgs), []
+            // Returns reversed elements for simplicity sake
+            let popTwo stack =
+                let second, stack = popStack stack
+                let first, stack = popStack stack
+                first, second, stack
             // The elements returned by this are reverse of stack order (aka code order)
             let findMagic stack =
                 let rec sub stack acc =
@@ -18,6 +23,19 @@ module Processor =
                     | head :: rest -> head :: acc |> sub rest
                     | [] -> acc, None, []
                 sub stack []
+
+            let compileBinaryOp token a b =
+                match token with
+                | "+" -> Binary (Add, a, b)
+                | "-" -> Binary (Subtract, a, b)
+                | "*" -> Binary (Multiply, a, b)
+                | "/" -> Binary (Divide, a, b)
+                | "%" -> Binary (Modulo, a, b)
+                | "&" -> Binary (And, a, b)
+                | "|" -> Binary (Or, a, b)
+                | "^" -> Binary (Xor, a, b)
+                | _ -> raise ICE
+
             let rec compileNext tokens stack topLocation =
                 match tokens with
                 | (Token.Float x, _) :: rest -> (Type.Float, Value(Float x)) :: stack, rest, None
@@ -34,9 +52,22 @@ module Processor =
                     match magic with
                     | Some (ArrayStart _) -> (Type.Array (Some values.Length), Array values) :: stack, rest, None
                     | _ -> raise (SyntaxError ("Unexpected ] in word", location))
-                | x ->
-                    printfn "Stack: %A" stack
-                    raise (SyntaxError ("Unknown token '" + x + "'", location))
+                | _ ->
+                    let ostack = compileStackWord token stack
+                    match ostack with
+                    | Some stack -> stack, rest, None
+                    | None ->
+                        printfn "Stack: %A" stack
+                        raise (SyntaxError ("Unknown token '" + token + "'", location))
+            and compileStackWord token stack =
+                match token with
+                | "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" ->
+                    let a, b, stack = popTwo stack
+                    Some ((Unknown, compileBinaryOp token a b) :: stack)
+                | "swap" ->
+                    let a, b, stack = popTwo stack
+                    Some (a :: b :: stack)
+                | _ -> None
             
             let rec compileAll tokens stack acc =
                 match tokens with
