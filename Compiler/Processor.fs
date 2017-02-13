@@ -4,12 +4,14 @@ open Utility
 
 module Processor =
     let buildAst (topLevel:Word) =
-        let rec compileWord word icmacros icwords =
+        let rec compileWord word icmacros icwords (icmlocals : Map<string, TypedNode>) =
             let macros = joinMaps icmacros word.Macros
             let words = joinMaps icwords word.Words
 
+            let mutable mlocals = icmlocals
+
             let mutable unnamedArgs = 0
-            let popStack stack =
+            let pop stack =
                 match stack with
                 | head :: rest -> head, rest
                 | [] ->
@@ -17,8 +19,8 @@ module Processor =
                     (Unknown, ArgumentReference unnamedArgs), []
             // Returns reversed elements for simplicity sake
             let popTwo stack =
-                let second, stack = popStack stack
-                let first, stack = popStack stack
+                let second, stack = pop stack
+                let first, stack = pop stack
                 first, second, stack
             // The elements returned by this are reverse of stack order (aka code order)
             let findMagic stack =
@@ -52,28 +54,40 @@ module Processor =
                 match token with
                 | _ when macros.ContainsKey(token) ->
                     stack, macros.[token].Block @ rest, None
-                | "[" -> 
-                    (Magic, ArrayStart location) :: stack, rest, None
-                | "]" ->
-                    let values, magic, stack = findMagic stack
-                    match magic with
-                    | Some (ArrayStart _) -> (Type.Array (Some values.Length), Array values) :: stack, rest, None
-                    | _ -> raise (SyntaxError ("Unexpected ] in word", location))
+                | _ when token.StartsWith("=>") ->
+                    let rv, stack = pop stack
+                    mlocals <- mlocals.Add(token.Substring(2), rv)
+                    stack, rest, None
+                | _ when token.StartsWith("=") ->
+                    let rv, stack = pop stack
+                    let lv = Unknown, LocalReference (token.Substring(1))
+                    stack, rest, Some (Type.Unit, Assignment (lv, rv))
                 | _ ->
-                    let ostack = compileStackWord token stack
+                    let ostack = compileStackWord token stack location
                     match ostack with
                     | Some stack -> stack, rest, None
                     | None ->
                         printfn "Stack: %A" stack
                         raise (SyntaxError ("Unknown token '" + token + "'", location))
-            and compileStackWord token stack =
+            and compileStackWord token stack location =
                 match token with
+                | _ when mlocals.ContainsKey(token) ->
+                    Some (mlocals.[token] :: stack)
                 | "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" ->
                     let a, b, stack = popTwo stack
                     Some ((Unknown, compileBinaryOp token a b) :: stack)
+                | "[" -> Some ((Magic, ArrayStart location) :: stack)
+                | "]" ->
+                    let values, magic, stack = findMagic stack
+                    match magic with
+                    | Some (ArrayStart _) -> Some ((Type.Array (Some values.Length), Array values) :: stack)
+                    | _ -> raise (SyntaxError ("Unexpected ] in word", location))
                 | "swap" ->
                     let a, b, stack = popTwo stack
                     Some (a :: b :: stack)
+                | "dup" ->
+                    let x, stack = pop stack
+                    Some (x :: x :: stack)
                 | _ -> None
             
             let rec compileAll tokens stack acc =
@@ -91,4 +105,4 @@ module Processor =
             // XXX: This should output a Word, not a block.
             Block all
         
-        compileWord topLevel Map.empty Map.empty
+        compileWord topLevel Map.empty Map.empty Map.empty

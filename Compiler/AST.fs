@@ -47,7 +47,6 @@ type Node =
 | Cast of To:Type * RValue:TypedNode
 | Call of Callee:TypedNode * Arguments:(TypedNode list)
 | Array of TypedNode list
-| Assignment of Target:TypedNode * RValue:TypedNode
 | Index of Base:TypedNode * Index:TypedNode
 | MemberReference of Base:TypedNode * Member:string
 | Swizzle of Base:TypedNode * Elements:(Value list) // Values must be Int or String
@@ -59,6 +58,7 @@ type Node =
 | Return of TypedNode
 | Break
 | Continue
+| Assignment of Target:TypedNode * RValue:TypedNode
 | Word of Name:string * Returns:(Type list) * Arguments:((string * Type) list)
 // Magical nodes used for internal purposes
 | ArrayStart of Location
