@@ -1,8 +1,13 @@
 ﻿namespace Compiler
 
+open Utility
+
 module Processor =
     let buildAst (topLevel:Word) =
-        let rec compileWord word =
+        let rec compileWord word icmacros icwords =
+            let macros = joinMaps icmacros word.Macros
+            let words = joinMaps icwords word.Words
+
             let mutable unnamedArgs = 0
             let popStack stack =
                 match stack with
@@ -45,6 +50,8 @@ module Processor =
                 | [] -> raise (EOFError ("Reached end of word while parsing", topLocation))
             and compileToken token rest location stack =
                 match token with
+                | _ when macros.ContainsKey(token) ->
+                    stack, macros.[token].Block @ rest, None
                 | "[" -> 
                     (Magic, ArrayStart location) :: stack, rest, None
                 | "]" ->
@@ -84,4 +91,4 @@ module Processor =
             // XXX: This should output a Word, not a block.
             Block all
         
-        compileWord topLevel
+        compileWord topLevel Map.empty Map.empty

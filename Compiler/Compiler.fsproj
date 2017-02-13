@@ -53,6 +53,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <None Include="Script.fsx" />
     <Content Include="packages.config" />
+    <Compile Include="Utility.fs" />
     <Compile Include="Tokenizer.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Parser.fs" />

@@ -1,5 +1,7 @@
 ﻿namespace Compiler
 
+open Utility
+
 type Argument = { Name : string option; Stored : bool }
 type Signature = Argument list
 type Macro = { Name : string; Block : LocatedToken list }
@@ -59,7 +61,7 @@ module Parser =
             None, block
     
     let parseShorthand (token:string) location =
-        let token = [for c in token -> string c]
+        let token = stringToList token
         let token, modifiers = 
             match token with
             | ["/"; "{"]          -> ["{"], ["map"]
@@ -72,9 +74,7 @@ module Parser =
             | ["*"; "{"]          -> ["{"], ["call"]
             | "*" :: rest         -> rest, ["call"]
             | _                   -> token, []
-        let sb = System.Text.StringBuilder(token.Length)
-        token |> List.iter (sb.Append >> ignore)
-        sb.ToString(), [for elem in modifiers -> (Token.Other elem, location)]
+        listToString token, [for elem in modifiers -> (Token.Other elem, location)]
     
     // This does not rewrite block shorthand!
     let rewriteShorthand tokens =
