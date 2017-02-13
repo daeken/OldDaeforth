@@ -60,7 +60,7 @@ module Processor =
                     stack, rest, None
                 | _ when token.StartsWith("=") ->
                     let rv, stack = pop stack
-                    let lv = Unknown, LocalReference (token.Substring(1))
+                    let lv = Unknown, location, LocalReference (token.Substring(1))
                     stack, rest, Some (Type.Unit, location, Assignment (lv, rv))
                 | _ ->
                     let ostack = compileStackWord token stack location
