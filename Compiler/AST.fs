@@ -61,5 +61,5 @@ type Node =
 | Assignment of Target:TypedNode * RValue:TypedNode
 | Word of Name:string * Returns:(Type list) * Arguments:((string * Type) list)
 // Magical nodes used for internal purposes
-| ArrayStart of Location
-and TypedNode = Type * Node
+| ArrayStart
+and TypedNode = Type * Location * Node

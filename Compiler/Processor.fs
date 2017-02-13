@@ -16,7 +16,7 @@ module Processor =
                 | head :: rest -> head, rest
                 | [] ->
                     unnamedArgs <- unnamedArgs - 1
-                    (Unknown, ArgumentReference unnamedArgs), []
+                    (Unknown, Location.Generated, ArgumentReference unnamedArgs), []
             // Returns reversed elements for simplicity sake
             let popTwo stack =
                 let second, stack = pop stack
@@ -26,7 +26,7 @@ module Processor =
             let findMagic stack =
                 let rec sub stack acc =
                     match stack with
-                    | (Magic, magic) :: rest -> acc, Some magic, rest
+                    | (Magic, _, magic) :: rest -> acc, Some magic, rest
                     | head :: rest -> head :: acc |> sub rest
                     | [] -> acc, None, []
                 sub stack []
@@ -45,9 +45,9 @@ module Processor =
 
             let rec compileNext tokens stack topLocation =
                 match tokens with
-                | (Token.Float x, _) :: rest -> (Type.Float, Value(Float x)) :: stack, rest, None
-                | (Token.Integer x, _) :: rest -> (Type.Int, Value(Int x)) :: stack, rest, None
-                | (Token.String x, _) :: rest -> (Type.String, Value(String x)) :: stack, rest, None
+                | (Token.Float x, location) :: rest -> (Type.Float, location, Value(Float x)) :: stack, rest, None
+                | (Token.Integer x, location) :: rest -> (Type.Int, location, Value(Int x)) :: stack, rest, None
+                | (Token.String x, location) :: rest -> (Type.String, location, Value(String x)) :: stack, rest, None
                 | (Token.Other x, location) :: rest -> compileToken x rest location stack
                 | [] -> raise (EOFError ("Reached end of word while parsing", topLocation))
             and compileToken token rest location stack =
@@ -61,7 +61,7 @@ module Processor =
                 | _ when token.StartsWith("=") ->
                     let rv, stack = pop stack
                     let lv = Unknown, LocalReference (token.Substring(1))
-                    stack, rest, Some (Type.Unit, Assignment (lv, rv))
+                    stack, rest, Some (Type.Unit, location, Assignment (lv, rv))
                 | _ ->
                     let ostack = compileStackWord token stack location
                     match ostack with
@@ -75,12 +75,12 @@ module Processor =
                     Some (mlocals.[token] :: stack)
                 | "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" ->
                     let a, b, stack = popTwo stack
-                    Some ((Unknown, compileBinaryOp token a b) :: stack)
-                | "[" -> Some ((Magic, ArrayStart location) :: stack)
+                    Some ((Unknown, location, compileBinaryOp token a b) :: stack)
+                | "[" -> Some ((Magic, location, ArrayStart) :: stack)
                 | "]" ->
                     let values, magic, stack = findMagic stack
                     match magic with
-                    | Some (ArrayStart _) -> Some ((Type.Array (Some values.Length), Array values) :: stack)
+                    | Some ArrayStart -> Some ((Type.Array (Some values.Length), location, Array values) :: stack)
                     | _ -> raise (SyntaxError ("Unexpected ] in word", location))
                 | "swap" ->
                     let a, b, stack = popTwo stack
