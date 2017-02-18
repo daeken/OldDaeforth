@@ -27,7 +27,7 @@ let compile lang (fn : string) =
     printfn "\n\n\n"
     
     let ast = Processor.buildAst wordtree
-    printfn "%A" ast
+    printfn "%s" (Utility.astToString ast)
 
     ()
 

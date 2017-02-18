@@ -54,6 +54,16 @@ module Processor =
                 match token with
                 | _ when macros.ContainsKey(token) ->
                     stack, macros.[token].Block @ rest, None
+                | "{" ->
+                    let block, rest = Parser.parseBlock rest location
+                    (Type.Unknown, location, RawBlock block) :: stack, rest, None
+                | "call" ->
+                    let arg, stack = pop stack
+                    match arg with
+                    | Type.Unknown, _, RawBlock code ->
+                        stack, code @ rest, None
+                    | _, location, _ ->
+                        raise (SyntaxError ("Non-block passed to 'call'", location))
                 | _ when token.StartsWith("=>") ->
                     let rv, stack = pop stack
                     mlocals <- mlocals.Add(token.Substring(2), rv)
@@ -103,6 +113,6 @@ module Processor =
             let stack, all = compileAll block [] []
 
             // XXX: This should output a Word, not a block.
-            Block all
+            Type.Unknown, Location.Generated, Block all
         
         compileWord topLevel Map.empty Map.empty Map.empty

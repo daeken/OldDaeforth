@@ -1,5 +1,15 @@
 ﻿namespace Compiler
 
+
+type Token =
+    | Float of single
+    | Integer of int
+    | String of string
+    | Other of string
+type Location = { File : string; Position : int; Line : int; Column : int; Length : int } with
+    static member Generated = { File="Generated"; Position=0; Line=0; Column=0; Length=0 }
+type LocatedToken = Token * Location
+
 type Type =
 | Unknown
 | Float
@@ -39,9 +49,10 @@ type Node =
 | Value of Value
 | WordReference of string
 | LocalReference of string
+| GlobalReference of Name:string * Flags:(GlobalFlag list)
 | ArgumentReference of int // These can be positive (0 == first) or negative (-1 == last)
 | Block of TypedNode list
-| GlobalReference of Name:string * Flags:(GlobalFlag list)
+| RawBlock of LocatedToken list
 | Unary of Operation:Operation * RValue:TypedNode
 | Binary of Operation:Operation * LValue:TypedNode * RValue:TypedNode
 | Cast of To:Type * RValue:TypedNode

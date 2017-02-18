@@ -8,6 +8,11 @@ type Macro = { Name : string; Block : LocatedToken list }
 type Word = { Name : string; Signature : Signature option; Block : LocatedToken list; Words : Map<string, Word>; Macros : Map<string, Macro> }
 
 module Parser =
+    let mutable temporaryIndex = 0
+    let tempname () =
+        temporaryIndex <- temporaryIndex + 1
+        sprintf "temp_%i_" temporaryIndex
+    
     let stripComments tokens =
         let rec sub inp startLocations acc =
             match inp with
@@ -113,13 +118,37 @@ module Parser =
                 (Token.Other name, location) :: acc |> rewriteNames rest names
             | token :: rest -> token :: acc |> rewriteNames rest names
             | [] -> List.rev acc
+        
+        let containsUnderscore block =
+            List.exists (function | Token.Other "_", _ -> true | _ -> false) block
 
         let block, names =
             match signature with
             | Some x -> buildPreamble x Map.empty sblock
-            | None -> buildPreamble [{Name=Some "_"; Stored=false}] Map.empty sblock
+            | None ->
+                if containsUnderscore sblock then
+                    buildPreamble [{Name=Some "_"; Stored=false}] Map.empty sblock
+                else
+                    sblock, Map.empty
         
         rewriteNames block names []
+    
+    let parseBlock tokens startLocation =
+        // XXX: Need to handle block shorthand.
+        let rec iter inp startLocation acc =
+            match inp with
+            | (Token.Other "{", location) :: rest ->
+                let sub, rest = iter rest location []
+                sub @ ((Token.Other "{", location) :: acc) |> iter rest location
+            | (Token.Other "}", location) :: rest ->
+                (Token.Other "}", location) :: acc, rest
+            | x :: rest -> x :: acc |> iter rest startLocation
+            | [] -> raise (EOFError ("Reached end of tokens while parsing block", startLocation))
+        
+        let acc, rest = iter tokens startLocation []
+        match acc with
+        | _ :: acc -> (List.rev acc |> rewriteBlock (tempname ())), rest
+        | [] -> raise (EOFError ("Should never hit this case...", startLocation))
 
     let generateWordTree tokens =
         let rec parseWordOrMacro inp startLocation topLevel inMacro block words macros =
